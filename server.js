@@ -5,37 +5,25 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = {};
 
 io.on('connection', (socket) => {
-    console.log(`Player connected: ${socket.id}`);
-
     socket.on('joinRoom', ({ roomId, playerName }) => {
         socket.join(roomId);
-
         if (!rooms[roomId]) {
-            rooms[roomId] = {
-                players: {},
-                startTime: Date.now(),
-                duration: 5 * 60 * 1000,
-                currentPrice: 0
-            };
+            rooms[roomId] = { players: {}, currentPrice: 0 };
         }
-
         rooms[roomId].players[socket.id] = {
             id: socket.id,
             name: playerName || 'Trader',
             position: null,
-            score: 0, // Cumulative banked PnL score
+            score: 0, // Cumulative banked score (can be negative or positive)
             side: Object.keys(rooms[roomId].players).length === 0 ? 'bull' : 'bear'
         };
-
         io.to(roomId).emit('updateState', rooms[roomId]);
     });
 
@@ -52,36 +40,21 @@ io.on('connection', (socket) => {
         const player = room.players[socket.id];
         if (!player) return;
 
-        player.position = {
-            type,
-            entryPrice: price,
-            timestamp: Date.now()
-        };
-
+        player.position = { type, entryPrice: price };
         io.to(roomId).emit('updateState', room);
     });
 
     socket.on('closePosition', ({ roomId, currentPrice }) => {
         const room = rooms[roomId];
         if (!room) return;
-
         const player = room.players[socket.id];
         if (!player || !player.position) return;
 
         const entry = player.position.entryPrice;
-        let pnl = 0;
-        
-        // Calculate trade PnL (e.g. price difference or fixed unit multiplier)
-        if (player.position.type === 'LONG') {
-            pnl = currentPrice - entry;
-        } else if (player.position.type === 'SHORT') {
-            pnl = entry - currentPrice;
-        }
+        let pnl = player.position.type === 'LONG' ? (currentPrice - entry) : (entry - currentPrice);
 
-        // ACCUMULATE: Add this trade's result directly to your cumulative score
+        // ACCUMULATE: Add this trade's result directly to your cumulative banked score (handles negatives properly!)
         player.score = (player.score || 0) + pnl;
-
-        // Clear active position
         player.position = null;
 
         io.to(roomId).emit('updateState', room);
@@ -98,6 +71,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`TradeRival 1v1 server running on port ${PORT}`);
-});
+server.listen(PORT);
