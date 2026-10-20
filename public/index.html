@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>TradeRival 1v1 - Combo Fighting Arena</title>
+    <meta name="theme-color" content="#020617">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+            50% { box-shadow: 0 0 45px rgba(16, 185, 129, 0.8); }
+        }
+        @keyframes shake-ring {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-5px, 4px); }
+            40% { transform: translate(5px, -4px); }
+            60% { transform: translate(-4px, -2px); }
+            80% { transform: translate(4px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+        .glow-btn { animation: pulse-glow 2.5s infinite ease-in-out; }
+        .shake-impact { animation: shake-ring 0.25s ease-in-out; }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card-accent {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.85));
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col justify-between min-h-screen p-3 select-none touch-manipulation overflow-x-hidden">
+
+    <!-- Top App Header -->
+    <header class="text-center mt-1">
+        <div class="flex justify-between items-center px-1">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-sm shadow-lg shadow-emerald-500/20">TR</div>
+                <h1 class="text-lg font-black bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent tracking-wider">TRADERIVAL</h1>
+            </div>
+
+            <a href="https://ko-fi.com" target="_blank" onclick="triggerHaptic(20)" class="glass-card bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 hover:bg-amber-500/20 active:scale-95 transition-all">
+                <span>☕</span>
+                <span>Tip Dev</span>
+            </a>
+        </div>
+        
+        <!-- Ticker Strip -->
+        <div class="grid grid-cols-4 gap-1 mt-2 text-[10px] font-mono">
+            <div class="glass-card p-1.5 rounded-xl text-center">
+                <span class="text-slate-400 block text-[8px]">BTC</span>
+                <span id="ticker-btc" class="font-bold text-emerald-400">$65,000</span>
+            </div>
+            <div class="glass-card p-1.5 rounded-xl text-center">
+                <span class="text-slate-400 block text-[8px]">ETH</span>
+                <span id="ticker-eth" class="font-bold text-emerald-400">$3,500</span>
+            </div>
+            <div class="glass-card p-1.5 rounded-xl text-center">
+                <span class="text-slate-400 block text-[8px]">SOL</span>
+                <span id="ticker-sol" class="font-bold text-emerald-400">$150.0</span>
+            </div>
+            <div class="glass-card p-1.5 rounded-xl text-center">
+                <span class="text-slate-400 block text-[8px]">XRP</span>
+                <span id="ticker-xrp" class="font-bold text-emerald-400">$0.60</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 flex flex-col justify-center items-center my-2 w-full max-w-sm mx-auto">
+        
+        <!-- Screen 1: Lobby -->
+        <div id="lobby-screen" class="w-full text-center flex flex-col items-center">
+            
+            <!-- User Handle Card -->
+            <div class="glass-card-accent p-3 rounded-2xl w-full my-2 text-left flex justify-between items-center">
+                <div>
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">YOUR TRADER HANDLE</span>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <span id="user-handle" class="text-xs font-mono text-emerald-400 font-extrabold">CyberBull#101</span>
+                        <button onclick="editHandle()" class="text-[10px] text-slate-400 hover:text-emerald-300">✏️</button>
+                    </div>
+                </div>
+                <div class="glass-card px-2.5 py-1 rounded-full text-[10px] text-slate-300 font-semibold flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="online-users">1 Online</span>
+                </div>
+            </div>
+
+            <!-- Mode Switcher -->
+            <div class="grid grid-cols-2 gap-2 w-full my-1">
+                <button onclick="setGameMode('1v1')" id="tab-1v1" class="py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">🥊 1v1 Arena</button>
+                <button onclick="setGameMode('SOLO')" id="tab-solo" class="py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 border border-slate-800">🤖 Vs. AI Bot Trader</button>
+            </div>
+
+            <!-- Asset Selector -->
+            <div class="w-full text-left my-1.5">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Market Pair</label>
+                <div class="grid grid-cols-4 gap-1.5">
+                    <button onclick="selectAsset('BTC')" id="asset-BTC" class="py-2 text-xs font-black rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">BTC</button>
+                    <button onclick="selectAsset('ETH')" id="asset-ETH" class="py-2 text-xs font-black rounded-xl bg-slate-900 text-slate-400 border border-slate-800">ETH</button>
+                    <button onclick="selectAsset('SOL')" id="asset-SOL" class="py-2 text-xs font-black rounded-xl bg-slate-900 text-slate-400 border border-slate-800">SOL</button>
+                    <button onclick="selectAsset('XRP')" id="asset-XRP" class="py-2 text-xs font-black rounded-xl bg-slate-900 text-slate-400 border border-slate-800">XRP</button>
+                </div>
+            </div>
+
+            <!-- Duration Selector -->
+            <div class="w-full text-left my-1.5">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Match Duration</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                    <button onclick="selectDuration(60)" id="dur-60" class="py-2 text-xs font-bold rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">⚡ 1 Min</button>
+                    <button onclick="selectDuration(180)" id="dur-180" class="py-2 text-xs font-bold rounded-xl bg-slate-900 text-slate-400 border border-slate-800">⚔️ 3 Min</button>
+                    <button onclick="selectDuration(300)" id="dur-300" class="py-2 text-xs font-bold rounded-xl bg-slate-900 text-slate-400 border border-slate-800">🛡️ 5 Min</button>
+                </div>
+            </div>
+
+            <!-- Match Button -->
+            <button onclick="startBattleAction()" id="action-btn" class="glow-btn w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-slate-950 font-black text-lg tracking-wider uppercase shadow-2xl border border-emerald-300 my-2 active:scale-95 transition-all">
+                🥊 ENTER BOXING RING
+            </button>
+
+            <!-- Leaderboard -->
+            <div class="glass-card p-3 rounded-2xl w-full text-left mt-2 border border-slate-800">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">🏆 Top Session Traders</span>
+                    <span class="text-[9px] text-emerald-400 font-mono">HIGH SCORE</span>
+                </div>
+                <div id="leaderboard-list" class="flex flex-col gap-1.5 text-xs font-mono"></div>
+            </div>
+
+        </div>
+
+        <!-- Screen 2: Queue -->
+        <div id="queue-screen" class="hidden w-full text-center glass-card p-8 rounded-3xl border border-teal-500/30">
+            <span class="animate-spin text-5xl block mb-4 text-teal-400">⏳</span>
+            <h3 class="text-base font-extrabold text-slate-100">Searching Opponent...</h3>
+            <p class="text-xs text-slate-400 mt-1" id="queue-details">Searching for a 1-min BTC duel.</p>
+            <button onclick="cancelQueue()" class="mt-6 bg-slate-800 text-slate-300 text-xs px-5 py-2 rounded-xl font-bold active:scale-95">Cancel Queue</button>
+        </div>
+
+        <!-- Screen 3: Active Battle Screen -->
+        <div id="battle-screen" class="hidden w-full glass-card p-3.5 rounded-3xl border border-slate-700/80 flex flex-col gap-2 shadow-2xl">
+            
+            <!-- Dual Player Status -->
+            <div class="grid grid-cols-3 gap-1 items-center pb-2 border-b border-slate-800 text-xs">
+                <div class="text-left">
+                    <span class="text-[9px] text-slate-400 block font-bold truncate" id="p1-label">YOU</span>
+                    <span id="your-pnl" class="text-base font-black text-slate-100">$0.00</span>
+                </div>
+
+                <div class="bg-slate-900 border border-teal-500/30 px-2 py-1 rounded-xl text-center font-mono">
+                    <span class="text-[8px] block text-slate-500">TIMER</span>
+                    <span id="match-timer" class="text-xs font-black text-teal-400">01:00</span>
+                </div>
+
+                <div class="text-right" id="p2-container">
+                    <span class="text-[9px] text-slate-400 block font-bold truncate" id="p2-label">OPPONENT</span>
+                    <span id="opp-pnl" class="text-base font-black text-slate-100">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Hybrid Arena Canvas (Fighters + Live Background Chart) -->
+            <div id="ring-container" class="relative w-full h-52 bg-slate-900 rounded-2xl overflow-hidden border border-emerald-500/30 shadow-2xl flex flex-col justify-between p-2 my-1">
+                <!-- Health Bar -->
+                <div class="w-full h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 flex relative shadow-inner z-10">
+                    <div id="p1-health" class="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 transition-all duration-300" style="width: 50%;"></div>
+                    <div id="p2-health" class="h-full bg-gradient-to-r from-rose-600 via-red-500 to-rose-400 transition-all duration-300" style="width: 50%;"></div>
+                    <div class="absolute inset-0 flex items-center justify-center font-black text-[9px] text-white drop-shadow tracking-wider">
+                        <span id="pnl-gap-label">EVEN BATTLE</span>
+                    </div>
+                </div>
+
+                <canvas id="fighter-canvas" class="w-full h-40 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 rounded-xl"></canvas>
+            </div>
+
+            <!-- Position Status Card -->
+            <div class="glass-card p-2 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                <div>
+                    <span class="text-[9px] text-slate-400 block font-bold">ACTIVE POSITION</span>
+                    <span id="position-type" class="font-extrabold text-slate-300">FLAT (NO TRADE)</span>
+                </div>
+                <button id="close-btn" onclick="executeTrade('CLOSE')" class="hidden bg-amber-500/20 text-amber-400 border border-amber-500/40 px-3 py-1 rounded-lg text-xs font-bold active:scale-95 transition-all">Close Position</button>
+            </div>
+
+            <!-- Leverage Selector Row -->
+            <div class="flex items-center justify-between gap-1 glass-card p-1 rounded-xl border border-slate-800">
+                <span class="text-[9px] font-bold text-slate-400 px-1.5 uppercase">LEVERAGE:</span>
+                <div class="flex gap-1 flex-1">
+                    <button onclick="setLeverage(10)" id="lev-10" class="flex-1 py-1 text-[10px] font-black rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">10x</button>
+                    <button onclick="setLeverage(50)" id="lev-50" class="flex-1 py-1 text-[10px] font-black rounded-lg bg-slate-800 text-slate-400 border border-slate-700">50x 🔥</button>
+                    <button onclick="setLeverage(100)" id="lev-100" class="flex-1 py-1 text-[10px] font-black rounded-lg bg-slate-800 text-slate-400 border border-slate-700">100x ⚡</button>
+                </div>
+            </div>
+
+            <!-- Execution Triggers -->
+            <div class="grid grid-cols-2 gap-2 mt-0.5">
+                <button onclick="executeTrade('LONG')" class="py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 active:from-emerald-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-xl border border-emerald-400/40">
+                    🟢 LONG (BUY)
+                </button>
+                <button onclick="executeTrade('SHORT')" class="py-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-500 active:from-rose-500 text-white font-black text-xs tracking-wider uppercase shadow-xl border border-rose-400/40">
+                    🔴 SHORT (SELL)
+                </button>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="text-center text-[10px] text-slate-500 my-1">
+        <p class="font-medium text-slate-400">TradeRival 1v1 • Hybrid Chart & Combo Boxing Arena</p>
+    </footer>
+
+    <script>
+        const socket = io();
+        let currentRoomId = null, myId = null, priceHistory = [], audioCtx = null;
+        let selectedAsset = 'BTC', selectedDuration = 60, selectedLeverage = 10, gameMode = '1v1';
+        let soloInterval = null, soloTimeLeft = 60, soloPosition = null, soloPnl = 0, soloBalance = 10000;
+        let aiBotPosition = null, aiBotPnl = 0, aiBotHandle = 'GridBot3000';
+
+        let userHandle = localStorage.getItem('tradeRivalHandle');
+
+        // Advanced Fighter Animation State
+        let p1Fighter = { x: 110, state: 'IDLE', aura: false, comboHits: 0, fallen: false };
+        let p2Fighter = { x: 170, state: 'IDLE', aura: false, comboHits: 0, fallen: false };
+        let hitParticles = [], damageTextList = [];
+
+        function setGameMode(mode) {
+            triggerHaptic(20);
+            gameMode = mode;
+            document.getElementById('tab-1v1').className = mode === '1v1' ? 'py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 border border-slate-800';
+            document.getElementById('tab-solo').className = mode === 'SOLO' ? 'py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 border border-slate-800';
+            document.getElementById('action-btn').innerText = mode === '1v1' ? '🥊 ENTER BOXING RING' : '🤖 DUEL AI BOT TRADER';
+        }
+
+        function selectAsset(asset) {
+            triggerHaptic(20);
+            selectedAsset = asset;
+            ['BTC', 'ETH', 'SOL', 'XRP'].forEach(a => {
+                document.getElementById(`asset-${a}`).className = a === asset ? 'py-2 text-xs font-black rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'py-2 text-xs font-black rounded-xl bg-slate-900 text-slate-400 border border-slate-800';
+            });
+        }
+
+        function selectDuration(dur) {
+            triggerHaptic(20);
+            selectedDuration = dur;
+            [60, 180, 300].forEach(d => {
+                document.getElementById(`dur-${d}`).className = d === dur ? 'py-2 text-xs font-bold rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'py-2 text-xs font-bold rounded-xl bg-slate-900 text-slate-400 border border-slate-800';
+            });
+        }
+
+        function setLeverage(lev) {
+            triggerHaptic(20);
+            selectedLeverage = lev;
+            p1Fighter.aura = (lev >= 50);
+            [10, 50, 100].forEach(l => {
+                document.getElementById(`lev-${l}`).className = l === lev ? 'flex-1 py-1 text-[10px] font-black rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'flex-1 py-1 text-[10px] font-black rounded-lg bg-slate-800 text-slate-400 border border-slate-700';
+            });
+        }
+
+        function editHandle() {
+            const newName = prompt('Enter your new Trader Handle:', userHandle || '');
+            if (newName && newName.trim().length > 2) {
+                userHandle = newName.trim();
+                localStorage.setItem('tradeRivalHandle', userHandle);
+                document.getElementById('user-handle').innerText = userHandle;
+                socket.emit('update_handle', userHandle);
+            }
+        }
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            if (type === 'LONG') {
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12);
+            } else if (type === 'SHORT') {
+                osc.frequency.setValueAtTime(329.63, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.12);
+            } else if (type === 'HIT') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.1);
+            } else {
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(660, audioCtx.currentTime + 0.15);
+            }
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+        }
+
+        function triggerHaptic(ms = 40) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+        socket.on('init_data', (data) => {
+            myId = socket.id;
+            if (userHandle) {
+                document.getElementById('user-handle').innerText = userHandle;
+                socket.emit('update_handle', userHandle);
+            } else {
+                userHandle = data.handle;
+                localStorage.setItem('tradeRivalHandle', userHandle);
+                document.getElementById('user-handle').innerText = userHandle;
+            }
+            renderLeaderboard(data.leaderboard);
+        });
+
+        socket.on('online_count', (count) => {
+            document.getElementById('online-users').innerText = `${count} Online`;
+        });
+
+        socket.on('price_update', (data) => {
+            const p = data.prices;
+            document.getElementById('ticker-btc').innerText = `$${p.BTC.toFixed(2)}`;
+            document.getElementById('ticker-eth').innerText = `$${p.ETH.toFixed(2)}`;
+            document.getElementById('ticker-sol').innerText = `$${p.SOL.toFixed(1)}`;
+            document.getElementById('ticker-xrp').innerText = `$${p.XRP.toFixed(4)}`;
+
+            priceHistory.push(p[selectedAsset]);
+            if (priceHistory.length > 45) priceHistory.shift();
+
+            if (gameMode === 'SOLO') {
+                updateSoloEngine(p[selectedAsset]);
+            }
+        });
+
+        socket.on('leaderboard_update', (lb) => renderLeaderboard(lb));
+
+        function renderLeaderboard(lb) {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = lb.map((item, idx) => `
+                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                    <span class="text-slate-300 font-bold">${item.handle === userHandle ? '⭐ ' : ''}#${idx + 1} ${item.handle}</span>
+                    <span class="text-emerald-400 font-black">+$${item.pnl} (${item.asset})</span>
+                </div>
+            `).join('');
+        }
+
+        function startBattleAction() {
+            triggerHaptic([50, 30, 50]);
+            playSound('SWIPE');
+            p1Fighter.fallen = false;
+            p2Fighter.fallen = false;
+            
+            if (gameMode === '1v1') {
+                document.getElementById('lobby-screen').classList.add('hidden');
+                document.getElementById('queue-screen').classList.remove('hidden');
+                document.getElementById('queue-details').innerText = `Searching for a ${selectedDuration / 60}-min ${selectedAsset} duel...`;
+                socket.emit('find_match', { asset: selectedAsset, duration: selectedDuration });
+            } else {
+                startSoloGame();
+            }
+        }
+
+        function cancelQueue() {
+            socket.emit('cancel_queue');
+            document.getElementById('queue-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.remove('hidden');
+        }
+
+        socket.on('match_started', (data) => {
+            triggerHaptic([100, 50, 100]);
+            playSound('LONG');
+            currentRoomId = data.roomId;
+            
+            const isP1 = (myId === data.p1.id);
+            document.getElementById('p1-label').innerText = 'YOU';
+            document.getElementById('p2-label').innerText = isP1 ? data.p2.handle : data.p1.handle;
+            document.getElementById('p2-container').classList.remove('hidden');
+
+            document.getElementById('queue-screen').classList.add('hidden');
+            document.getElementById('battle-screen').classList.remove('hidden');
+
+            requestAnimationFrame(animateFighters);
+        });
+
+        function executeTrade(type) {
+            triggerHaptic(30);
+            playSound(type);
+            if (gameMode === '1v1' && currentRoomId) {
+                socket.emit('execute_trade', { roomId: currentRoomId, type: type, leverage: selectedLeverage });
+            } else if (gameMode === 'SOLO') {
+                const currentPrice = priceHistory[priceHistory.length - 1];
+                if (type === 'CLOSE') {
+                    soloBalance += soloPnl;
+                    soloPosition = null;
+                    soloPnl = 0;
+                } else {
+                    soloPosition = { type, entryPrice: currentPrice, leverage: selectedLeverage, amount: 10000 };
+                }
+                updateSoloUI();
+            }
+        }
+
+        socket.on('match_tick', (data) => {
+            const mins = Math.floor(data.timeLeft / 60);
+            const secs = (data.timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('match-timer').innerText = `${mins.toString().padStart(2, '0')}:${secs}`;
+
+            const isP1 = (myId === currentRoomId.split('_')[1]);
+            const myPnl = isP1 ? data.p1Pnl : data.p2Pnl;
+            const oppPnl = isP1 ? data.p2Pnl : data.p1Pnl;
+
+            const myPnlEl = document.getElementById('your-pnl');
+            myPnlEl.innerText = `${myPnl >= 0 ? '+' : ''}$${myPnl.toFixed(2)}`;
+            myPnlEl.className = `text-base font-black ${myPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const oppPnlEl = document.getElementById('opp-pnl');
+            oppPnlEl.innerText = `${oppPnl >= 0 ? '+' : ''}$${oppPnl.toFixed(2)}`;
+            oppPnlEl.className = `text-base font-black ${oppPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const myPos = isP1 ? data.p1Pos : data.p2Pos;
+            const posTypeEl = document.getElementById('position-type');
+            const closeBtn = document.getElementById('close-btn');
+
+            if (myPos) {
+                posTypeEl.innerText = `${myPos.type} (${myPos.leverage || 10}x) @ $${myPos.entryPrice.toFixed(2)}`;
+                posTypeEl.className = `font-bold ${myPos.type === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}`;
+                closeBtn.classList.remove('hidden');
+            } else {
+                posTypeEl.innerText = 'FLAT (NO TRADE)';
+                posTypeEl.className = 'font-bold text-slate-300';
+                closeBtn.classList.add('hidden');
+            }
+
+            updateBoxingStage(myPnl, oppPnl);
+        });
+
+        socket.on('match_over', (data) => {
+            const isWinner = (data.winnerId === myId);
+            if (isWinner) p2Fighter.fallen = true;
+            else p1Fighter.fallen = true;
+
+            triggerHaptic([200, 100, 200]);
+            setTimeout(() => {
+                alert(isWinner ? '🏆 K.O. VICTORY! Opponent knocked out!' : (data.winnerId === 'draw' ? '🤝 DRAW MATCH!' : '💔 KNOCKED OUT! Opponent wins!'));
+                location.reload();
+            }, 800);
+        });
+
+        // Smart Solo AI Trader Engine
+        function startSoloGame() {
+            soloTimeLeft = selectedDuration;
+            soloPosition = null;
+            soloPnl = 0;
+            aiBotPosition = null;
+            aiBotPnl = 0;
+            p2Fighter.aura = true; // Bot Has Aura
+
+            const bots = ['GridBot3000', 'MomentumNinja', 'AlphaScalper', 'QuantumAI'];
+            aiBotHandle = bots[Math.floor(Math.random() * bots.length)];
+
+            document.getElementById('p1-label').innerText = 'YOU';
+            document.getElementById('p2-label').innerText = `🤖 ${aiBotHandle}`;
+            document.getElementById('p2-container').classList.remove('hidden');
+
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('battle-screen').classList.remove('hidden');
+
+            requestAnimationFrame(animateFighters);
+
+            soloInterval = setInterval(() => {
+                soloTimeLeft--;
+                const mins = Math.floor(soloTimeLeft / 60);
+                const secs = (soloTimeLeft % 60).toString().padStart(2, '0');
+                document.getElementById('match-timer').innerText = `${mins.toString().padStart(2, '0')}:${secs}`;
+
+                // AI Bot Logic (Places trades on momentum)
+                if (priceHistory.length > 3 && Math.random() > 0.6) {
+                    const priceDiff = priceHistory[priceHistory.length - 1] - priceHistory[priceHistory.length - 3];
+                    const currentPrice = priceHistory[priceHistory.length - 1];
+                    if (priceDiff > 0) {
+                        aiBotPosition = { type: 'LONG', entryPrice: currentPrice, leverage: 50 };
+                    } else if (priceDiff < 0) {
+                        aiBotPosition = { type: 'SHORT', entryPrice: currentPrice, leverage: 50 };
+                    }
+                }
+
+                if (soloTimeLeft <= 0) {
+                    clearInterval(soloInterval);
+                    const isWin = soloPnl > aiBotPnl;
+                    if (isWin) p2Fighter.fallen = true;
+                    else p1Fighter.fallen = true;
+
+                    setTimeout(() => {
+                        alert(isWin ? `🏆 K.O. VICTORY over ${aiBotHandle}!\nYour PnL: $${soloPnl.toFixed(2)}` : `💔 DEFEAT by ${aiBotHandle}!\nBot PnL: $${aiBotPnl.toFixed(2)}`);
+                        socket.emit('submit_solo_score', { pnl: soloPnl, asset: selectedAsset });
+                        location.reload();
+                    }, 800);
+                }
+            }, 1000);
+        }
+
+        function updateSoloEngine(currentPrice) {
+            if (soloPosition) {
+                const diff = currentPrice - soloPosition.entryPrice;
+                const pct = diff / soloPosition.entryPrice;
+                soloPnl = soloPosition.type === 'LONG' ? (10000 * pct * soloPosition.leverage) : (10000 * (-pct) * soloPosition.leverage);
+            }
+
+            if (aiBotPosition) {
+                const diff = currentPrice - aiBotPosition.entryPrice;
+                const pct = diff / aiBotPosition.entryPrice;
+                aiBotPnl = aiBotPosition.type === 'LONG' ? (10000 * pct * aiBotPosition.leverage) : (10000 * (-pct) * aiBotPosition.leverage);
+            }
+
+            updateSoloUI();
+            updateBoxingStage(soloPnl, aiBotPnl);
+        }
+
+        function updateSoloUI() {
+            const myPnlEl = document.getElementById('your-pnl');
+            myPnlEl.innerText = `${soloPnl >= 0 ? '+' : ''}$${soloPnl.toFixed(2)}`;
+            myPnlEl.className = `text-base font-black ${soloPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const oppPnlEl = document.getElementById('opp-pnl');
+            oppPnlEl.innerText = `${aiBotPnl >= 0 ? '+' : ''}$${aiBotPnl.toFixed(2)}`;
+            oppPnlEl.className = `text-base font-black ${aiBotPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const posTypeEl = document.getElementById('position-type');
+            const closeBtn = document.getElementById('close-btn');
+
+            if (soloPosition) {
+                posTypeEl.innerText = `${soloPosition.type} (${soloPosition.leverage}x) @ $${soloPosition.entryPrice.toFixed(2)}`;
+                posTypeEl.className = `font-bold ${soloPosition.type === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}`;
+                closeBtn.classList.remove('hidden');
+            } else {
+                posTypeEl.innerText = 'FLAT (NO TRADE)';
+                posTypeEl.className = 'font-bold text-slate-300';
+                closeBtn.classList.add('hidden');
+            }
+        }
+
+        // Hybrid Fighter & Chart Rendering Engine
+        const fCanvas = document.getElementById('fighter-canvas');
+        const fCtx = fCanvas ? fCanvas.getContext('2d') : null;
+
+        function animateFighters() {
+            if (!fCanvas || !fCtx) return;
+            fCanvas.width = fCanvas.offsetWidth;
+            fCanvas.height = fCanvas.offsetHeight;
+
+            fCtx.clearRect(0, 0, fCanvas.width, fCanvas.height);
+
+            // 1. Draw Background Live Chart Overlay
+            drawBackgroundChart();
+
+            // 2. Draw Floor & Ring Ropes
+            const groundY = fCanvas.height - 20;
+            fCtx.fillStyle = '#0f172a';
+            fCtx.fillRect(0, groundY, fCanvas.width, 20);
+
+            fCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            fCtx.lineWidth = 1.5;
+            for(let r = 1; r <= 3; r++) {
+                fCtx.beginPath();
+                fCtx.moveTo(0, groundY - (r * 18));
+                fCtx.lineTo(fCanvas.width, groundY - (r * 18));
+                fCtx.stroke();
+            }
+
+            // 3. Draw Flaming Auras
+            if (p1Fighter.aura) drawAura(p1Fighter.x, groundY, '#10b981');
+            if (p2Fighter.aura) drawAura(p2Fighter.x, groundY, '#f43f5e');
+
+            // 4. Draw Boxers (with Knockout Fall handling)
+            drawBoxer(p1Fighter.x, groundY, '#10b981', p1Fighter.state, 1, p1Fighter.fallen);
+            drawBoxer(p2Fighter.x, groundY, '#f43f5e', p2Fighter.state, -1, p2Fighter.fallen);
+
+            // 5. Particles
+            hitParticles.forEach((p, idx) => {
+                fCtx.fillStyle = p.color;
+                fCtx.beginPath();
+                fCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                fCtx.fill();
+                p.x += p.vx;
+                p.y += p.vy;
+                p.size *= 0.88;
+                if (p.size < 0.4) hitParticles.splice(idx, 1);
+            });
+
+            // 6. Floating Damage / Combo Text
+            damageTextList.forEach((d, idx) => {
+                fCtx.fillStyle = d.color;
+                fCtx.font = '900 13px "Plus Jakarta Sans"';
+                fCtx.fillText(d.text, d.x, d.y);
+                d.y -= 1.2;
+                d.alpha -= 0.02;
+                if (d.alpha <= 0) damageTextList.splice(idx, 1);
+            });
+
+            requestAnimationFrame(animateFighters);
+        }
+
+        function drawBackgroundChart() {
+            if (priceHistory.length < 2) return;
+            const min = Math.min(...priceHistory);
+            const max = Math.max(...priceHistory);
+            const range = max - min || 1;
+
+            fCtx.save();
+            fCtx.globalAlpha = 0.25; // Transparent Overlay Behind Fighters
+            fCtx.beginPath();
+            fCtx.strokeStyle = priceHistory[priceHistory.length - 1] >= priceHistory[0] ? '#10b981' : '#f43f5e';
+            fCtx.lineWidth = 2.5;
+
+            priceHistory.forEach((price, idx) => {
+                const x = (idx / (priceHistory.length - 1)) * fCanvas.width;
+                const y = (fCanvas.height - 30) - (((price - min) / range) * (fCanvas.height - 60));
+                if (idx === 0) fCtx.moveTo(x, y);
+                else fCtx.lineTo(x, y);
+            });
+            fCtx.stroke();
+            fCtx.restore();
+        }
+
+        function drawAura(x, y, color) {
+            fCtx.save();
+            fCtx.fillStyle = color;
+            fCtx.globalAlpha = 0.25;
+            fCtx.beginPath();
+            fCtx.arc(x, y - 22, 22 + Math.sin(Date.now() / 100) * 3, 0, Math.PI * 2);
+            fCtx.fill();
+            fCtx.restore();
+        }
+
+        function drawBoxer(x, y, color, state, dir, fallen = false) {
+            fCtx.strokeStyle = color;
+            fCtx.fillStyle = color;
+            fCtx.lineWidth = 3.5;
+
+            // Knockout Fall Animation (Collapse on floor)
+            if (fallen) {
+                fCtx.save();
+                fCtx.translate(x, y - 5);
+                fCtx.rotate((dir * 90) * Math.PI / 180); // Lying flat on ground
+                
+                fCtx.beginPath(); fCtx.arc(0, -30, 7, 0, Math.PI * 2); fCtx.stroke(); // Head
+                fCtx.beginPath(); fCtx.moveTo(0, -23); fCtx.lineTo(0, -5); fCtx.stroke(); // Body
+                fCtx.beginPath(); fCtx.moveTo(0, -5); fCtx.lineTo(-6, 8); fCtx.moveTo(0, -5); fCtx.lineTo(6, 8); fCtx.stroke(); // Legs
+                
+                fCtx.restore();
+                return;
+            }
+
+            // Head
+            fCtx.beginPath();
+            fCtx.arc(x, y - 36, 7, 0, Math.PI * 2);
+            fCtx.stroke();
+
+            // Body
+            fCtx.beginPath();
+            fCtx.moveTo(x, y - 29);
+            fCtx.lineTo(x, y - 10);
+            fCtx.stroke();
+
+            // Legs
+            fCtx.beginPath();
+            fCtx.moveTo(x, y - 10);
+            fCtx.lineTo(x - 6 * dir, y);
+            fCtx.moveTo(x, y - 10);
+            fCtx.lineTo(x + 6 * dir, y);
+            fCtx.stroke();
+
+            // Punch & Hit Animations
+            if (state === 'PUNCH' || state === 'COMBO') {
+                fCtx.beginPath();
+                fCtx.moveTo(x, y - 22);
+                fCtx.lineTo(x + 26 * dir, y - (state === 'COMBO' ? 28 : 22));
+                fCtx.stroke();
+
+                fCtx.beginPath();
+                fCtx.arc(x + 28 * dir, y - (state === 'COMBO' ? 28 : 22), 5, 0, Math.PI * 2);
+                fCtx.fill();
+            } else if (state === 'HIT') {
+                fCtx.beginPath();
+                fCtx.moveTo(x, y - 22);
+                fCtx.lineTo(x - 12 * dir, y - 32);
+                fCtx.stroke();
+            } else {
+                fCtx.beginPath();
+                fCtx.moveTo(x, y - 22);
+                fCtx.lineTo(x + 8 * dir, y - 26);
+                fCtx.stroke();
+
+                fCtx.beginPath();
+                fCtx.arc(x + 8 * dir, y - 26, 4, 0, Math.PI * 2);
+                fCtx.fill();
+            }
+        }
+
+        function triggerComboHit(attacker, dmgAmount) {
+            playSound('HIT');
+            triggerHaptic([60, 30, 60]);
+
+            const ringContainer = document.getElementById('ring-container');
+            ringContainer.classList.add('shake-impact');
+            setTimeout(() => ringContainer.classList.remove('shake-impact'), 220);
+
+            if (attacker === 'P1') {
+                p1Fighter.comboHits++;
+                p1Fighter.state = p1Fighter.comboHits >= 2 ? 'COMBO' : 'PUNCH';
+                p2Fighter.state = 'HIT';
+                p1Fighter.x = 135;
+                p2Fighter.x = 185;
+                
+                spawnSparks(p2Fighter.x, fCanvas.height - 40, '#f43f5e');
+                const text = p1Fighter.comboHits >= 2 ? `🔥 ${p1Fighter.comboHits}x COMBO! (-$${dmgAmount.toFixed(0)})` : `-$${dmgAmount.toFixed(0)}!`;
+                damageTextList.push({ text: text, x: p2Fighter.x - 20, y: fCanvas.height - 50, color: '#f43f5e', alpha: 1 });
+            } else {
+                p2Fighter.comboHits++;
+                p2Fighter.state = p2Fighter.comboHits >= 2 ? 'COMBO' : 'PUNCH';
+                p1Fighter.state = 'HIT';
+                p2Fighter.x = 135;
+                p1Fighter.x = 85;
+
+                spawnSparks(p1Fighter.x, fCanvas.height - 40, '#10b981');
+                const text = p2Fighter.comboHits >= 2 ? `⚡ ${p2Fighter.comboHits}x COMBO! (-$${dmgAmount.toFixed(0)})` : `-$${dmgAmount.toFixed(0)}!`;
+                damageTextList.push({ text: text, x: p1Fighter.x - 20, y: fCanvas.height - 50, color: '#10b981', alpha: 1 });
+            }
+
+            setTimeout(() => {
+                p1Fighter.state = 'IDLE';
+                p2Fighter.state = 'IDLE';
+                p1Fighter.x = 110;
+                p2Fighter.x = 170;
+            }, 250);
+        }
+
+        function spawnSparks(x, y, color) {
+            for (let i = 0; i < 14; i++) {
+                hitParticles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 9,
+                    vy: (Math.random() - 0.5) * 9,
+                    size: 4.5,
+                    color: color
+                });
+            }
+        }
+
+        function updateBoxingStage(myPnl, oppPnl) {
+            const diff = myPnl - oppPnl;
+            let p1Percent = 50 + (diff / 250) * 50;
+            p1Percent = Math.max(5, Math.min(95, p1Percent));
+
+            document.getElementById('p1-health').style.width = `${p1Percent}%`;
+            document.getElementById('p2-health').style.width = `${100 - p1Percent}%`;
+
+            const label = document.getElementById('pnl-gap-label');
+            if (diff > 25) {
+                label.innerText = `LANDING COMBOS (+$${diff.toFixed(0)})`;
+                triggerComboHit('P1', Math.abs(diff));
+            } else if (diff < -25) {
+                label.innerText = `TAKING DAMAGE (-$${Math.abs(diff).toFixed(0)})`;
+                triggerComboHit('P2', Math.abs(diff));
+            } else {
+                p1Fighter.comboHits = 0;
+                p2Fighter.comboHits = 0;
+                label.innerText = 'EVEN BATTLE';
+            }
+        }
+    </script>
+</body>
+</html>
