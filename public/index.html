@@ -15,7 +15,7 @@
 
     <header class="text-center mb-4">
         <h1 class="text-3xl font-extrabold text-amber-400 tracking-wider">⚡ TRADERIVAL 1v1 ⚡</h1>
-        <p class="text-xs text-slate-400">Live Crypto Combat • 1-Min Candlestick Arena</p>
+        <p class="text-xs text-slate-400">Live Crypto Combat • Cumulative PnL Engine</p>
     </header>
 
     <div class="relative w-full max-w-2xl">
@@ -26,11 +26,10 @@
                 <span id="livePrice" class="text-lg font-bold text-green-400">$0.00</span>
             </div>
             <div class="text-right">
-                <span class="text-xs text-slate-400">TOTAL SCORE (BANKED):</span>
-                <span id="playerScore" class="text-lg font-bold text-amber-400">$0.00</span>
-                <div class="text-xs">
-                    <span class="text-slate-400">Active Trade PnL:</span> 
-                    <span id="floatingPnL" class="font-bold text-slate-200">$0.00</span>
+                <span class="text-xs text-slate-400">TOTAL NET PnL:</span>
+                <span id="totalNetPnL" class="text-lg font-bold text-amber-400">$0.00</span>
+                <div class="text-xs text-slate-400">
+                    Banked: <span id="bankedScoreDisp">$0.00</span> | Active: <span id="floatingPnL">$0.00</span>
                 </div>
             </div>
         </div>
@@ -88,22 +87,33 @@
             processPriceTick(currentPrice, timestamp);
             socket.emit('priceUpdate', { roomId, price: currentPrice });
 
-            // Calculate active floating trade PnL in real-time
+            updatePnLDisplay();
+        };
+
+        function updatePnLDisplay() {
+            let floatPnL = 0;
             if (activePosition) {
-                let floatPnL = 0;
                 if (activePosition.type === 'LONG') {
                     floatPnL = currentPrice - activePosition.entryPrice;
                 } else {
                     floatPnL = activePosition.entryPrice - currentPrice;
                 }
-                const floatEl = document.getElementById('floatingPnL');
-                floatEl.innerText = `${floatPnL >= 0 ? '+' : ''}$${floatPnL.toFixed(2)}`;
-                floatEl.className = floatPnL >= 0 ? 'font-bold text-green-400' : 'font-bold text-red-400';
-            } else {
-                document.getElementById('floatingPnL').innerText = '$0.00';
-                document.getElementById('floatingPnL').className = 'font-bold text-slate-200';
             }
-        };
+
+            // Update active trade display
+            const floatEl = document.getElementById('floatingPnL');
+            floatEl.innerText = `${floatPnL >= 0 ? '+' : ''}$${floatPnL.toFixed(2)}`;
+            floatEl.className = floatPnL >= 0 ? 'font-bold text-green-400' : 'font-bold text-red-400';
+
+            // Update banked display
+            document.getElementById('bankedScoreDisp').innerText = `${bankedScore >= 0 ? '+' : ''}$${bankedScore.toFixed(2)}`;
+
+            // Total Net PnL = Banked History + Active Trade Floating PnL
+            const totalNet = bankedScore + floatPnL;
+            const netEl = document.getElementById('totalNetPnL');
+            netEl.innerText = `${totalNet >= 0 ? '+' : ''}$${totalNet.toFixed(2)}`;
+            netEl.className = totalNet >= 0 ? 'text-lg font-bold text-green-400' : 'text-lg font-bold text-red-400';
+        }
 
         function handleTrade(type) {
             activePosition = { type, entryPrice: currentPrice };
@@ -126,9 +136,7 @@
             const myState = room.players[socket.id];
             if (myState) {
                 bankedScore = myState.score || 0;
-                const scoreEl = document.getElementById('playerScore');
-                scoreEl.innerText = `${bankedScore >= 0 ? '+' : ''}$${bankedScore.toFixed(2)}`;
-                scoreEl.className = bankedScore >= 0 ? 'text-lg font-bold text-green-400' : 'text-lg font-bold text-red-400';
+                updatePnLDisplay();
             }
         });
 
