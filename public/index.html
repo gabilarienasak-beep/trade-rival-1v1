@@ -7,22 +7,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: monospace; }
-        canvas { border: 2px solid #334155; border-radius: 8px; background: #020617; }
+        body { background-color: #090d16; color: #f8fafc; font-family: monospace; }
+        canvas { border: 2px solid #334155; border-radius: 8px; background: #020617; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-    <header class="text-center mb-4">
+    <header class="text-center mb-3">
         <h1 class="text-3xl font-extrabold text-amber-400 tracking-wider">⚡ TRADERIVAL 1v1 ⚡</h1>
-        <p class="text-xs text-slate-400">Live Crypto Combat • Cumulative PnL Engine</p>
+        <p class="text-xs text-slate-400">Live 1-Min Candlestick Chart & Combat Arena</p>
     </header>
 
     <div class="relative w-full max-w-2xl">
         <!-- HUD Header -->
-        <div class="flex justify-between items-center bg-slate-800 p-3 rounded-t-lg border-b border-slate-700">
+        <div class="flex justify-between items-center bg-slate-800/90 backdrop-blur p-3 rounded-t-lg border-b border-slate-700">
             <div>
-                <span class="text-xs text-slate-400">BTC/USDT:</span>
+                <span class="text-xs text-slate-400">BTC/USDT LIVE:</span>
                 <span id="livePrice" class="text-lg font-bold text-green-400">$0.00</span>
             </div>
             <div class="text-right">
@@ -34,16 +34,18 @@
             </div>
         </div>
 
-        <canvas id="gameCanvas" width="600" height="300" class="w-full"></canvas>
+        <!-- Hybrid Canvas Stage (Chart + Fighting Arena) -->
+        <canvas id="gameCanvas" width="600" height="320" class="w-full"></canvas>
 
+        <!-- Trading Controls -->
         <div class="grid grid-cols-3 gap-2 mt-3">
-            <button onclick="handleTrade('LONG')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">
+            <button onclick="handleTrade('LONG')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg transition">
                 🐂 LONG (BUY)
             </button>
-            <button onclick="handleClose()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg shadow-lg">
+            <button onclick="handleClose()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg shadow-lg transition">
                 🔒 CLOSE & BANK
             </button>
-            <button onclick="handleTrade('SHORT')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-lg shadow-lg">
+            <button onclick="handleTrade('SHORT')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-lg shadow-lg transition">
                 🐻 SHORT (SELL)
             </button>
         </div>
@@ -62,13 +64,13 @@
 
         let candles = [];
         let currentCandle = null;
-        const CANDLE_INTERVAL = 60 * 1000;
+        const CANDLE_INTERVAL = 60 * 1000; // 1-minute candles
 
         function processPriceTick(price, timestamp) {
             const candleTime = Math.floor(timestamp / CANDLE_INTERVAL) * CANDLE_INTERVAL;
             if (!currentCandle || currentCandle.time !== candleTime) {
                 if (currentCandle) candles.push(currentCandle);
-                if (candles.length > 40) candles.shift();
+                if (candles.length > 35) candles.shift();
                 currentCandle = { time: candleTime, open: price, high: price, low: price, close: price };
             } else {
                 currentCandle.high = Math.max(currentCandle.high, price);
@@ -100,15 +102,12 @@
                 }
             }
 
-            // Update active trade display
             const floatEl = document.getElementById('floatingPnL');
             floatEl.innerText = `${floatPnL >= 0 ? '+' : ''}$${floatPnL.toFixed(2)}`;
             floatEl.className = floatPnL >= 0 ? 'font-bold text-green-400' : 'font-bold text-red-400';
 
-            // Update banked display
             document.getElementById('bankedScoreDisp').innerText = `${bankedScore >= 0 ? '+' : ''}$${bankedScore.toFixed(2)}`;
 
-            // Total Net PnL = Banked History + Active Trade Floating PnL
             const totalNet = bankedScore + floatPnL;
             const netEl = document.getElementById('totalNetPnL');
             netEl.innerText = `${totalNet >= 0 ? '+' : ''}$${totalNet.toFixed(2)}`;
@@ -143,42 +142,85 @@
         function drawArena() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // 1. Draw Background 1-Min Candlestick Chart
             const allCandles = [...candles, currentCandle].filter(Boolean);
             if (allCandles.length > 0) {
                 const maxPrice = Math.max(...allCandles.map(c => c.high));
                 const minPrice = Math.min(...allCandles.map(c => c.low));
                 const priceRange = maxPrice - minPrice || 1;
+                const chartHeight = canvas.height - 70;
                 const candleWidth = canvas.width / Math.max(allCandles.length, 25);
 
+                // Draw subtle grid lines
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                for (let i = 1; i < 4; i++) {
+                    let yGrid = (chartHeight / 4) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(0, yGrid);
+                    ctx.lineTo(canvas.width, yGrid);
+                    ctx.stroke();
+                }
+
+                // Draw Candles
                 allCandles.forEach((c, i) => {
                     const x = i * candleWidth + 10;
                     const isGreen = c.close >= c.open;
-                    const yHigh = canvas.height - ((c.high - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
-                    const yLow = canvas.height - ((c.low - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
-                    const yOpen = canvas.height - ((c.open - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
-                    const yClose = canvas.height - ((c.close - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
+                    
+                    const yHigh = chartHeight - ((c.high - minPrice) / priceRange) * (chartHeight - 40) - 20;
+                    const yLow = chartHeight - ((c.low - minPrice) / priceRange) * (chartHeight - 40) - 20;
+                    const yOpen = chartHeight - ((c.open - minPrice) / priceRange) * (chartHeight - 40) - 20;
+                    const yClose = chartHeight - ((c.close - minPrice) / priceRange) * (chartHeight - 40) - 20;
 
-                    ctx.strokeStyle = isGreen ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+                    // Wick
+                    ctx.strokeStyle = isGreen ? '#22c55e' : '#ef4444';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
                     ctx.moveTo(x + candleWidth / 2, yHigh);
                     ctx.lineTo(x + candleWidth / 2, yLow);
                     ctx.stroke();
 
-                    ctx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+                    // Body
+                    ctx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)';
                     const bodyY = Math.min(yOpen, yClose);
-                    const bodyHeight = Math.max(Math.abs(yOpen - yClose), 2);
-                    ctx.fillRect(x + 2, bodyY, candleWidth - 4, bodyHeight);
+                    const bodyHeight = Math.max(Math.abs(yOpen - yClose), 3);
+                    ctx.fillRect(x + 1, bodyY, candleWidth - 3, bodyHeight);
                 });
+
+                // Display High/Low price tags on right side of chart
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText(`$${maxPrice.toFixed(0)}`, canvas.width - 10, 15);
+                ctx.fillText(`$${minPrice.toFixed(0)}`, canvas.width - 10, chartHeight - 5);
             }
 
+            // 2. Draw Ground Floor for Fighters
             ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, canvas.height - 25, canvas.width, 25);
+            ctx.fillRect(0, canvas.height - 35, canvas.width, 35);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 35);
+            ctx.lineTo(canvas.width, canvas.height - 35);
+            ctx.stroke();
 
-            ctx.font = '42px sans-serif';
+            // 3. Draw Fighting Avatars (Bull vs Bear) on top of the chart background
+            ctx.font = '46px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(playerSide === 'bull' ? '🐂' : '🐻', 150, canvas.height - 35);
-            ctx.fillText(playerSide === 'bull' ? '🐻' : '🐂', 450, canvas.height - 35);
+
+            // Player Avatar
+            const playerEmoji = playerSide === 'bull' ? '🐂' : '🐻';
+            ctx.fillText(playerEmoji, 160, canvas.height - 45);
+
+            // Rival / Bot Avatar
+            const rivalEmoji = playerSide === 'bull' ? '🐻' : '🐂';
+            ctx.fillText(rivalEmoji, 440, canvas.height - 45);
+
+            // VS tag in middle
+            ctx.fillStyle = '#f59e0b';
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText('VS', canvas.width / 2, canvas.height - 55);
 
             requestAnimationFrame(drawArena);
         }
