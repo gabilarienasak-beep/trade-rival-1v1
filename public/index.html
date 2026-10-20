@@ -15,7 +15,7 @@
 
     <header class="text-center mb-3">
         <h1 class="text-3xl font-extrabold text-amber-400 tracking-wider">⚡ TRADERIVAL 1v1 ⚡</h1>
-        <p class="text-xs text-slate-400">Live 1-Min Candlestick Chart & Combat Arena</p>
+        <p class="text-xs text-slate-400">Live 1-Min Candlestick Chart & Cumulative PnL Combat</p>
     </header>
 
     <div class="relative w-full max-w-2xl">
@@ -59,12 +59,12 @@
         const roomId = "room-1v1";
         let currentPrice = 0;
         let activePosition = null;
-        let bankedScore = 0;
+        let bankedScore = 0; // Authoritative score from server
         let playerSide = 'bull';
 
         let candles = [];
         let currentCandle = null;
-        const CANDLE_INTERVAL = 60 * 1000; // 1-minute candles
+        const CANDLE_INTERVAL = 60 * 1000;
 
         function processPriceTick(price, timestamp) {
             const candleTime = Math.floor(timestamp / CANDLE_INTERVAL) * CANDLE_INTERVAL;
@@ -96,9 +96,9 @@
             let floatPnL = 0;
             if (activePosition) {
                 if (activePosition.type === 'LONG') {
-                    floatPnL = currentPrice - activePosition.entryPrice;
+                    floatPnL = (currentPrice - activePosition.entryPrice) * activePosition.leverage;
                 } else {
-                    floatPnL = activePosition.entryPrice - currentPrice;
+                    floatPnL = (activePosition.entryPrice - currentPrice) * activePosition.leverage;
                 }
             }
 
@@ -115,14 +115,15 @@
         }
 
         function handleTrade(type) {
-            activePosition = { type, entryPrice: currentPrice };
+            const leverage = 1; // Default multiplier
+            activePosition = { type, entryPrice: currentPrice, leverage };
             playerSide = type === 'LONG' ? 'bull' : 'bear';
-            socket.emit('openPosition', { roomId, type, price: currentPrice });
+            socket.emit('openPosition', { roomId, type, leverage });
         }
 
         function handleClose() {
             if (!activePosition) return;
-            socket.emit('closePosition', { roomId, currentPrice });
+            socket.emit('closePosition', { roomId });
             activePosition = null;
         }
 
@@ -134,7 +135,10 @@
         socket.on('updateState', (room) => {
             const myState = room.players[socket.id];
             if (myState) {
-                bankedScore = myState.score || 0;
+                bankedScore = myState.realizedPnL || 0;
+                if (!myState.position) {
+                    activePosition = null; // Clear local position if server confirmed close/switch
+                }
                 updatePnLDisplay();
             }
         });
@@ -142,7 +146,6 @@
         function drawArena() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Background 1-Min Candlestick Chart
             const allCandles = [...candles, currentCandle].filter(Boolean);
             if (allCandles.length > 0) {
                 const maxPrice = Math.max(...allCandles.map(c => c.high));
@@ -151,7 +154,6 @@
                 const chartHeight = canvas.height - 70;
                 const candleWidth = canvas.width / Math.max(allCandles.length, 25);
 
-                // Draw subtle grid lines
                 ctx.strokeStyle = '#1e293b';
                 ctx.lineWidth = 1;
                 for (let i = 1; i < 4; i++) {
@@ -162,7 +164,6 @@
                     ctx.stroke();
                 }
 
-                // Draw Candles
                 allCandles.forEach((c, i) => {
                     const x = i * candleWidth + 10;
                     const isGreen = c.close >= c.open;
@@ -172,7 +173,6 @@
                     const yOpen = chartHeight - ((c.open - minPrice) / priceRange) * (chartHeight - 40) - 20;
                     const yClose = chartHeight - ((c.close - minPrice) / priceRange) * (chartHeight - 40) - 20;
 
-                    // Wick
                     ctx.strokeStyle = isGreen ? '#22c55e' : '#ef4444';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
@@ -180,14 +180,12 @@
                     ctx.lineTo(x + candleWidth / 2, yLow);
                     ctx.stroke();
 
-                    // Body
                     ctx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)';
                     const bodyY = Math.min(yOpen, yClose);
                     const bodyHeight = Math.max(Math.abs(yOpen - yClose), 3);
                     ctx.fillRect(x + 1, bodyY, candleWidth - 3, bodyHeight);
                 });
 
-                // Display High/Low price tags on right side of chart
                 ctx.fillStyle = '#94a3b8';
                 ctx.font = '10px monospace';
                 ctx.textAlign = 'right';
@@ -195,7 +193,6 @@
                 ctx.fillText(`$${minPrice.toFixed(0)}`, canvas.width - 10, chartHeight - 5);
             }
 
-            // 2. Draw Ground Floor for Fighters
             ctx.fillStyle = '#1e293b';
             ctx.fillRect(0, canvas.height - 35, canvas.width, 35);
             ctx.strokeStyle = '#334155';
@@ -205,19 +202,11 @@
             ctx.lineTo(canvas.width, canvas.height - 35);
             ctx.stroke();
 
-            // 3. Draw Fighting Avatars (Bull vs Bear) on top of the chart background
             ctx.font = '46px sans-serif';
             ctx.textAlign = 'center';
+            ctx.fillText(playerSide === 'bull' ? '🐂' : '🐻', 160, canvas.height - 45);
+            ctx.fillText(playerSide === 'bull' ? '🐻' : '🐂', 440, canvas.height - 45);
 
-            // Player Avatar
-            const playerEmoji = playerSide === 'bull' ? '🐂' : '🐻';
-            ctx.fillText(playerEmoji, 160, canvas.height - 45);
-
-            // Rival / Bot Avatar
-            const rivalEmoji = playerSide === 'bull' ? '🐻' : '🐂';
-            ctx.fillText(rivalEmoji, 440, canvas.height - 45);
-
-            // VS tag in middle
             ctx.fillStyle = '#f59e0b';
             ctx.font = 'bold 14px monospace';
             ctx.fillText('VS', canvas.width / 2, canvas.height - 55);
