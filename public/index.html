@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TradeRival 1v1 - Real-Time Crypto Trading Duel Game</title>
-    <meta name="description" content="Play TradeRival 1v1 - an arcade-style real-time crypto trading duel game featuring Bull vs Bear combat, live Binance 1-min candlestick chart, and solo AI battles.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -14,39 +13,39 @@
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-    <!-- Header Section -->
     <header class="text-center mb-4">
         <h1 class="text-3xl font-extrabold text-amber-400 tracking-wider">⚡ TRADERIVAL 1v1 ⚡</h1>
         <p class="text-xs text-slate-400">Live Crypto Combat • 1-Min Candlestick Arena</p>
     </header>
 
-    <!-- Game Arena Container -->
     <div class="relative w-full max-w-2xl">
-        <!-- Live Price & Timer HUD -->
+        <!-- HUD Header -->
         <div class="flex justify-between items-center bg-slate-800 p-3 rounded-t-lg border-b border-slate-700">
             <div>
                 <span class="text-xs text-slate-400">BTC/USDT:</span>
                 <span id="livePrice" class="text-lg font-bold text-green-400">$0.00</span>
             </div>
             <div class="text-right">
-                <span class="text-xs text-slate-400">REALIZED SCORE:</span>
-                <span id="playerScore" class="text-lg font-bold text-amber-400">0.00%</span>
+                <span class="text-xs text-slate-400">TOTAL SCORE (BANKED):</span>
+                <span id="playerScore" class="text-lg font-bold text-amber-400">$0.00</span>
+                <div class="text-xs">
+                    <span class="text-slate-400">Active Trade PnL:</span> 
+                    <span id="floatingPnL" class="font-bold text-slate-200">$0.00</span>
+                </div>
             </div>
         </div>
 
-        <!-- Canvas Stage -->
         <canvas id="gameCanvas" width="600" height="300" class="w-full"></canvas>
 
-        <!-- Trading Controls -->
         <div class="grid grid-cols-3 gap-2 mt-3">
-            <button id="btnLong" onclick="handleTrade('LONG')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">
-                🐂 LONG (BULL)
+            <button onclick="handleTrade('LONG')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">
+                🐂 LONG (BUY)
             </button>
-            <button id="btnClose" onclick="handleClose()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg shadow-lg">
+            <button onclick="handleClose()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg shadow-lg">
                 🔒 CLOSE & BANK
             </button>
-            <button id="btnShort" onclick="handleTrade('SHORT')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-lg shadow-lg">
-                🐻 SHORT (BEAR)
+            <button onclick="handleTrade('SHORT')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-lg shadow-lg">
+                🐻 SHORT (SELL)
             </button>
         </div>
     </div>
@@ -62,25 +61,16 @@
         let bankedScore = 0;
         let playerSide = 'bull';
 
-        // --- 1-MINUTE CANDLESTICK ENGINE ---
         let candles = [];
         let currentCandle = null;
-        const CANDLE_INTERVAL = 60 * 1000; // 1 Min in ms
+        const CANDLE_INTERVAL = 60 * 1000;
 
         function processPriceTick(price, timestamp) {
             const candleTime = Math.floor(timestamp / CANDLE_INTERVAL) * CANDLE_INTERVAL;
-
             if (!currentCandle || currentCandle.time !== candleTime) {
                 if (currentCandle) candles.push(currentCandle);
                 if (candles.length > 40) candles.shift();
-
-                currentCandle = {
-                    time: candleTime,
-                    open: price,
-                    high: price,
-                    low: price,
-                    close: price
-                };
+                currentCandle = { time: candleTime, open: price, high: price, low: price, close: price };
             } else {
                 currentCandle.high = Math.max(currentCandle.high, price);
                 currentCandle.low = Math.min(currentCandle.low, price);
@@ -88,7 +78,6 @@
             }
         }
 
-        // --- BINANCE PUBLIC WEBSOCKET FEED ---
         const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -98,9 +87,24 @@
             document.getElementById('livePrice').innerText = `$${currentPrice.toFixed(2)}`;
             processPriceTick(currentPrice, timestamp);
             socket.emit('priceUpdate', { roomId, price: currentPrice });
+
+            // Calculate active floating trade PnL in real-time
+            if (activePosition) {
+                let floatPnL = 0;
+                if (activePosition.type === 'LONG') {
+                    floatPnL = currentPrice - activePosition.entryPrice;
+                } else {
+                    floatPnL = activePosition.entryPrice - currentPrice;
+                }
+                const floatEl = document.getElementById('floatingPnL');
+                floatEl.innerText = `${floatPnL >= 0 ? '+' : ''}$${floatPnL.toFixed(2)}`;
+                floatEl.className = floatPnL >= 0 ? 'font-bold text-green-400' : 'font-bold text-red-400';
+            } else {
+                document.getElementById('floatingPnL').innerText = '$0.00';
+                document.getElementById('floatingPnL').className = 'font-bold text-slate-200';
+            }
         };
 
-        // --- GAME ACTIONS ---
         function handleTrade(type) {
             activePosition = { type, entryPrice: currentPrice };
             playerSide = type === 'LONG' ? 'bull' : 'bear';
@@ -113,7 +117,6 @@
             activePosition = null;
         }
 
-        // --- SOCKET EVENT HANDLERS ---
         socket.on('connect', () => {
             const savedName = localStorage.getItem('traderHandle') || 'Trader';
             socket.emit('joinRoom', { roomId, playerName: savedName });
@@ -123,15 +126,15 @@
             const myState = room.players[socket.id];
             if (myState) {
                 bankedScore = myState.score || 0;
-                document.getElementById('playerScore').innerText = `${bankedScore >= 0 ? '+' : ''}${bankedScore.toFixed(2)}%`;
+                const scoreEl = document.getElementById('playerScore');
+                scoreEl.innerText = `${bankedScore >= 0 ? '+' : ''}$${bankedScore.toFixed(2)}`;
+                scoreEl.className = bankedScore >= 0 ? 'text-lg font-bold text-green-400' : 'text-lg font-bold text-red-400';
             }
         });
 
-        // --- CANVAS RENDER LOOP ---
         function drawArena() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Background 1-Min Candlestick Chart
             const allCandles = [...candles, currentCandle].filter(Boolean);
             if (allCandles.length > 0) {
                 const maxPrice = Math.max(...allCandles.map(c => c.high));
@@ -142,13 +145,11 @@
                 allCandles.forEach((c, i) => {
                     const x = i * candleWidth + 10;
                     const isGreen = c.close >= c.open;
-
                     const yHigh = canvas.height - ((c.high - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
                     const yLow = canvas.height - ((c.low - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
                     const yOpen = canvas.height - ((c.open - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
                     const yClose = canvas.height - ((c.close - minPrice) / priceRange) * (canvas.height * 0.7) - 30;
 
-                    // Wick
                     ctx.strokeStyle = isGreen ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
@@ -156,7 +157,6 @@
                     ctx.lineTo(x + candleWidth / 2, yLow);
                     ctx.stroke();
 
-                    // Body
                     ctx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
                     const bodyY = Math.min(yOpen, yClose);
                     const bodyHeight = Math.max(Math.abs(yOpen - yClose), 2);
@@ -164,21 +164,13 @@
                 });
             }
 
-            // 2. Draw Ground Floor
             ctx.fillStyle = '#1e293b';
             ctx.fillRect(0, canvas.height - 25, canvas.width, 25);
 
-            // 3. Draw Bull vs Bear Fighting Avatars
             ctx.font = '42px sans-serif';
             ctx.textAlign = 'center';
-
-            // Player Avatar
-            const playerEmoji = playerSide === 'bull' ? '🐂' : '🐻';
-            ctx.fillText(playerEmoji, 150, canvas.height - 35);
-
-            // Rival Avatar
-            const rivalEmoji = playerSide === 'bull' ? '🐻' : '🐂';
-            ctx.fillText(rivalEmoji, 450, canvas.height - 35);
+            ctx.fillText(playerSide === 'bull' ? '🐂' : '🐻', 150, canvas.height - 35);
+            ctx.fillText(playerSide === 'bull' ? '🐻' : '🐂', 450, canvas.height - 35);
 
             requestAnimationFrame(drawArena);
         }
